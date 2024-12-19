@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import com.secfix.todos.validator.EmailValidator;
 
 @Service
 public class UsersManagementService {
@@ -64,6 +65,13 @@ public class UsersManagementService {
     public UserDto createUser(UserCreateRequest request) {
         logger.info("Create user started, Data: <{}>", request.toString());
         try {
+            if (!EmailValidator.isValidEmail(request.getEmail())) {
+                logger.error("Invalid email format, Data: <{}>", request.toString());
+                throw new ApiServiceCallException(
+                        "Invalid email format.",
+                        HttpStatus.BAD_REQUEST
+                );
+            }
             UserInfo user = this.userInfoRepository.save(new UserInfo(request));
 
             logger.info("Create user completed, Data: <{}>", request.toString());
@@ -81,6 +89,14 @@ public class UsersManagementService {
     public UserDto updateUser(Integer userId, UserUpdateRequest request) {
         logger.info("Update user started, UserId: <{}>, Data: <{}>", userId, request.toString());
         try {
+            if (StringUtils.isNotBlank(request.getEmail()) && !EmailValidator.isValidEmail(request.getEmail())) {
+                logger.error("Invalid email format, UserId: <{}>, Data: <{}>", userId, request.toString());
+                throw new ApiServiceCallException(
+                        "Invalid email format.",
+                        HttpStatus.BAD_REQUEST
+                );
+            }
+
             UserInfo user = this.getUserById(userId);
 
             if (StringUtils.isNotBlank(request.getName())) {
