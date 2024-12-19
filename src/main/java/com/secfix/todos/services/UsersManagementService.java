@@ -3,7 +3,9 @@ package com.secfix.todos.services;
 import com.secfix.todos.apis.dtos.UserDto;
 import com.secfix.todos.apis.dtos.requests.UserCreateRequest;
 import com.secfix.todos.apis.dtos.requests.UserUpdateRequest;
+import com.secfix.todos.database.models.Task;
 import com.secfix.todos.database.models.UserInfo;
+import com.secfix.todos.database.repositories.TaskRepository;
 import com.secfix.todos.database.repositories.UserInfoRepository;
 import com.secfix.todos.exceptions.ApiServiceCallException;
 import java.util.List;
@@ -22,6 +24,9 @@ public class UsersManagementService {
 
     @Autowired
     private UserInfoRepository userInfoRepository;
+
+    @Autowired
+    private TaskRepository taskRepository;
 
     public List<UserDto> getUsers() {
         return this.userInfoRepository.findAll().stream()
@@ -108,18 +113,69 @@ public class UsersManagementService {
     public void deleteUser(Integer userId) {
         logger.info("Delete user started, UserId: <{}>", userId);
         try {
-            UserInfo user = this.getUserById(userId);
+            // Fetch the user to be deleted
+            UserInfo userToDelete = this.getUserById(userId);
 
-            this.userInfoRepository.delete(user);
+            // Check if the user still owns any tasks
+            List<Task> tasks = taskRepository.findByOwnerId(userId);
+            if (!tasks.isEmpty()) {
+                throw new IllegalStateException("Cannot delete user with assigned tasks. Please reassign tasks first.");
+            }
 
+            // Delete the user
+            userInfoRepository.delete(userToDelete);
             logger.info("Delete user completed, UserId: <{}>", userId);
+
         } catch (Exception ex) {
-            if (ex instanceof ApiServiceCallException)
+            if (ex instanceof ApiServiceCallException) {
                 throw (ApiServiceCallException) ex;
-            logger.info("Delete user failed, UserId: <{}>", userId, ex);
+            }
+            logger.error("Delete user failed, UserId: <{}>", userId, ex);
             throw new ApiServiceCallException(
                     "Delete user failed.",
-                    HttpStatus.INTERNAL_SERVER_ERROR);
+                    HttpStatus.INTERNAL_SERVER_ERROR
+            );
         }
     }
+
+    public boolean hasAssignedTasks(Integer userId) {
+        // Check if tasks exist for the given userId
+        return !taskRepository.findByOwnerId(userId).isEmpty();
+    }
+
+
+
+    public void reassignTasks(Integer userId, Integer newOwnerId) {
+        logger.info("Reassign tasks started, UserId: <{}>, NewOwnerId: <{}>", userId, newOwnerId);
+
+        try {
+
+            UserInfo newOwner = this.getUserById(newOwnerId);
+
+            List<Task> tasks = taskRepository.findByOwnerId(userId);
+
+            if (tasks.isEmpty()) {
+                logger.info("No tasks found for UserId: <{}>. No reassignment needed.", userId);
+            } else {
+                for (Task task : tasks) {
+                    task.setOwner(newOwner);
+                }
+                taskRepository.saveAll(tasks);
+                logger.info("Tasks reassigned successfully to NewOwnerId: <{}> for UserId: <{}>", newOwnerId, userId);
+            }
+
+        } catch (Exception ex) {
+            if (ex instanceof ApiServiceCallException) {
+                throw (ApiServiceCallException) ex;
+            }
+
+            logger.error("Reassign tasks failed, UserId: <{}>, NewOwnerId: <{}>", userId, newOwnerId, ex);
+            throw new ApiServiceCallException(
+                    "Reassign tasks failed.",
+                    HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+
 }

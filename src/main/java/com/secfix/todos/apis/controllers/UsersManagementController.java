@@ -128,21 +128,52 @@ public class UsersManagementController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Returns nothing", content = {
                     @Content(mediaType = "application/json") }),
+            @ApiResponse(responseCode = "400", description = "User has tasks assigned", content = @Content),
             @ApiResponse(responseCode = "500", description = "An error has occurred ", content = @Content)
     })
     @DeleteMapping("/{userId}")
     public ResponseEntity<?> deleteUser(HttpServletRequest request,
-            @Parameter(description = "User id") @PathVariable Integer userId) {
+                                        @Parameter(description = "User id") @PathVariable Integer userId) {
         try {
+            // Check if the user has tasks
+            if (usersManagementService.hasAssignedTasks(userId)) {
+                // If tasks are assigned, return a bad request error with a message
+                return new ResponseEntity<>("Cannot delete user with assigned tasks. Please reassign tasks first.", HttpStatus.BAD_REQUEST);
+            }
+
+            // Proceed with the deletion if no tasks are assigned
             this.usersManagementService.deleteUser(userId);
             return new ResponseEntity<>(HttpStatus.OK);
+
         } catch (ApiServiceCallException apiex) {
             return new ResponseEntity<>(apiex.getMessage(), apiex.getHttpStatus());
         } catch (Exception ex) {
-            logger.error("Error occured while deleting user <{}>",
-                    userId,
-                    ex);
+            logger.error("Error occurred while deleting user <{}>", userId, ex);
             return new ResponseEntity<>(ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+
+    @Operation(summary = "Reassign tasks of a user to a new owner")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Tasks reassigned successfully", content = @Content(mediaType = "application/json")),
+            @ApiResponse(responseCode = "400", description = "Invalid user or new owner", content = @Content),
+            @ApiResponse(responseCode = "500", description = "An error has occurred", content = @Content)
+    })
+    @PostMapping("/{userId}/reassign/{newOwnerId}")
+    public ResponseEntity<?> reassignTasks(HttpServletRequest request,
+                                           @Parameter(description = "User id whose tasks are being reassigned") @PathVariable Integer userId,
+                                           @Parameter(description = "New owner id") @PathVariable Integer newOwnerId) {
+        try {
+            // Reassign tasks to the new owner
+            usersManagementService.reassignTasks(userId, newOwnerId);
+            return new ResponseEntity<>(HttpStatus.OK);
+
+        } catch (Exception ex) {
+            logger.error("Error occurred while reassigning tasks for user <{}> to new owner <{}>", userId, newOwnerId, ex);
+            return new ResponseEntity<>(ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+
+
 }
