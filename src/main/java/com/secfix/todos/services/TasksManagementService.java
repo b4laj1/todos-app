@@ -122,9 +122,10 @@ public class TasksManagementService {
                 task.setName(request.getName());
             }
 
-            if (StringUtils.isNotBlank(request.getDescription())) {
+            if (request.getDescription() != null) {
                 task.setDescription(request.getDescription());
             }
+
 
             if (request.getPriority() != null) {
                 task.setPriority(request.getPriority());
